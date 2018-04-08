@@ -471,6 +471,7 @@ void LoadConfig()
 #endif
   }
   if(gConfig.rptTimes == 0 ) gConfig.rptTimes = 2;
+  gConfig.type = XLA_PRODUCT_Type;
 }
 
 void ResetNodeToRegister()
@@ -550,6 +551,7 @@ void CCT2ColdWarm(uint32_t ucBright, uint32_t ucWarmCold)
 
 // Send message and switch back to receive mode
 bool SendMyMessage() {
+  return TRUE;
   if( bMsgReady ) {
     
     // Change tx destination if necessary
@@ -571,7 +573,7 @@ bool SendMyMessage() {
 
       mutex = 0;
 //disableInterrupts();
-      CC1101_Set_Mode( RX_MODE );
+      //CC1101_Set_Mode( TX_MODE );
       //TODO
       //CC1101_Tx_Packet( (uint8_t *)g_Ashining, 3 , 1,ADDRESS_CHECK );
       /*if(RF24L01_set_mode_TX_timeout() == -1) 
@@ -804,7 +806,7 @@ void RestartCheck()
   }
 #endif
 }
-
+uint8_t brecv = 0;
 int main( void ) {
   uint8_t lv_Brightness;
       
@@ -893,6 +895,7 @@ int main( void ) {
   
     // IRQ
     CC1101_EnableIRQ();
+    CC1101_Set_Mode( RX_MODE );
     PrintDevStatus();
 #ifdef ENABLE_SDTM
     gConfig.nodeID = BASESERVICE_ADDRESS;
@@ -930,8 +933,13 @@ int main( void ) {
       // Send message if ready
       //printlog("SndS");
       SendMyMessage();
-      //printlog("SndE");
-      //printlog("SvgE");
+      //////////////////////////////
+      if(brecv)
+      {
+          bMsgReady = ParseProtocol();
+          CC1101_Set_Mode( RX_MODE );
+          brecv = 0;
+      }
       if(offdelaytick == 0)
       {
         printlog("soffS");
@@ -1762,40 +1770,10 @@ INTERRUPT_HANDLER(EXTI_PORTC_IRQHandler, 5) {
       int i = CC1101_Rx_Packet( g_RF24L01RxBuffer );		//½ÓÊÕ×Ö½Ú
       if( 0 != i )
       {
-        //brecv = 1;
+        brecv = 1;
         memcpy(prcvMsg,g_RF24L01RxBuffer+1,i-1);
-        bMsgReady = ParseProtocol();
         CC1101_Clear_RxBuffer( );
-        CC1101_Set_Mode( RX_MODE );
+        //CC1101_Set_Mode( RX_MODE );
       }
   }
-
-/*#ifdef TEST
-  PD7_High;
-#endif
-  if(RF24L01_is_data_available()) {
-    //Packet was received
-    RF24L01_clear_interrupts();
-    RF24L01_read_payload(prcvMsg, PLOAD_WIDTH);
-    bMsgReady = ParseProtocol();
-#ifdef TEST
-    PD7_Low;
-#endif
-    return;
-  }
- 
-  uint8_t sent_info;
-  if (sent_info = RF24L01_was_data_sent()) {
-    //Packet was sent or max retries reached
-    RF24L01_clear_interrupts();
-    mutex = sent_info;
-#ifdef TEST
-    PD7_Low;
-#endif
-    return;
-  }
-   RF24L01_clear_interrupts();
-#ifdef TEST
-  PD7_Low;
-#endif*/
 }
