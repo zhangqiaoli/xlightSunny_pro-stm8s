@@ -251,7 +251,8 @@ void ResetRFModule()
   {
     CC1101_Init(gConfig.rfChannel,gConfig.rfAddr);
     CC1101_EnableIRQ();
-    UpdateNodeAddress(NODEID_GATEWAY);
+    CC1101_Setup(gConfig.rfChannel,gConfig.rfAddr);
+    UpdateNodeAddress(NODEID_GATEWAY); 
     gResetRF=FALSE;
   }
   if(gResetNode)
@@ -550,8 +551,9 @@ void CCT2ColdWarm(uint32_t ucBright, uint32_t ucWarmCold)
 }
 
 // Send message and switch back to receive mode
+bool bSending = FALSE;
 bool SendMyMessage() {
-  return TRUE;
+  //return TRUE;
   if( bMsgReady ) {
     
     // Change tx destination if necessary
@@ -559,92 +561,26 @@ bool SendMyMessage() {
     
     uint8_t lv_tried = 0;
     uint16_t delay;
-    while (lv_tried++ <= gConfig.rptTimes ) {
+    while (lv_tried++ <= 1 ) {
       feed_wwdg();
-      // delay to avoid conflict
-      /*
-      if( bDelaySend && gConfig.nodeID >= NODEID_MIN_DEVCIE ) {
-        //delay_ms(gConfig.nodeID % 25 * 10);
-        mutex = 0;
-        WaitMutex((gConfig.nodeID - NODEID_MIN_DEVCIE + 1) * (uint32_t)255);
-        bDelaySend = FALSE;
-      }
-      */
-
-      mutex = 0;
-//disableInterrupts();
-      //CC1101_Set_Mode( TX_MODE );
       //TODO
-      //CC1101_Tx_Packet( (uint8_t *)g_Ashining, 3 , 1,ADDRESS_CHECK );
-      /*if(RF24L01_set_mode_TX_timeout() == -1) 
-        break;
-      if(RF24L01_write_payload_timeout(psndMsg, PLOAD_WIDTH) == -1) 
-        break;*/
-//enableInterrupts();
-      WaitMutex(0x1FFFF);
-#ifndef ENABLE_SDTM      
-      if (mutex == 1) {
-        m_cntRFSendFailed = 0;
-        gConfig.cntRFReset = 0;
-        break; // sent sccessfully
-      }
-      else {
-        m_cntRFSendFailed++;
-        if( m_cntRFSendFailed >= MAX_RF_FAILED_TIME ) {
-          m_cntRFSendFailed = 0;
-          gConfig.cntRFReset++;
-          if( gConfig.cntRFReset >= MAX_RF_RESET_TIME ) {
-            // Save Data
-            gIsStatusChanged = TRUE;
-            SaveStatusData();
-            
-#ifdef NO_RESTART_MODE
-            // Reset whole node
-            mStatus = SYS_RESET;
-#else
-            // Cold Reset
-            WWDG->CR = 0x80;   
-#endif
-            
-            break;
-          } else if( gConfig.cntRFReset > 1 ) {
-            // Reset whole node
-            mStatus = SYS_RESET;
-            break;
-          }
-
-          // Reset RF module
-          //RF24L01_DeInit();
-          delay = 0x1FFF;
-          while(delay--)feed_wwdg();
-          CC1101_Init(gConfig.rfChannel,gConfig.rfAddr);
-          CC1101_EnableIRQ();
-          UpdateNodeAddress(NODEID_GATEWAY);
-          continue;
-        }
-      }
-      
+      CC1101_Tx_Packet( psndMsg, PLOAD_WIDTH,1,ADDRESS_CHECK );
       //The transmission failed, Notes: mutex == 2 doesn't mean failed
       //It happens when rx address defers from tx address
       //asm("nop"); //Place a breakpoint here to see memory
       // Repeat the message if necessary
-      delay = 0xFFF;
-      while(delay--)feed_wwdg();
-#else
-      break;
-#endif
-
+      //delay = 0xFFF;
+      //while(delay--)feed_wwdg();
     }
     
     // Switch back to receive mode
     bMsgReady = 0;
-    //RF24L01_set_mode_RX();
     CC1101_Set_Mode( RX_MODE );
     // Reset Keep Alive Timer
     mTimerKeepAlive = 0;
   }
 
-  return(mutex > 0);
+  return TRUE;
 }
 
 void GotNodeID() {
@@ -700,95 +636,6 @@ void ProcessAutoSwitchLight()
 }
 
 bool SayHelloToDevice(bool infinate) {
-  uint8_t _count = 0;
-  uint8_t _presentCnt = 0;
-  bool _doNow = FALSE;
-
-  // Update RF addresses and Setup RF environment
-  UpdateNodeAddress(NODEID_GATEWAY);
-
-  while(mStatus < SYS_RUNNING) {
-    feed_wwdg();
-    ////////////rfscanner process///////////////////////////////
-    ProcessOutputCfgMsg(); 
-    ProcessAutoSwitchLight();
-    // Save Config if Changed
-    SaveConfig();
-    SendMyMessage();
-
-    ////////////rfscanner process///////////////////////////////
-    if( _count++ == 0 ) {
-      
-      if( isNodeIdRequired() ) {
-        mStatus = SYS_WAIT_NODEID;
-        mGotNodeID = FALSE;
-        // Request for NodeID
-        Msg_RequestNodeID();
-      } else {
-        mStatus = SYS_WAIT_PRESENTED;
-        // Send Presentation Message
-        Msg_Presentation();
-        _presentCnt++;
-#ifdef RAPID_PRESENTATION
-        // Don't wait for ack
-        mStatus = SYS_RUNNING;
-#endif        
-      }
-           
-      if( !SendMyMessage() ) {
-        if( !infinate ) return FALSE;
-      } else {
-        // Wait response
-        uint16_t tick = 0xBFFF;
-        while(tick-- && mStatus < SYS_RUNNING) {
-          // Feed the Watchdog
-          feed_wwdg();
-          if( mStatus == SYS_WAIT_NODEID && mGotNodeID ) {
-            mStatus = SYS_WAIT_PRESENTED;
-            _presentCnt = 0;
-            _doNow = TRUE;
-            break;
-          }
-        }
-      }
-    }
-
-    if( mStatus == SYS_RUNNING ) return TRUE;
-    
-    // Can't presented for a few times, then try request NodeID again
-    // Either because SmartController is off, or changed
-    if(  mStatus == SYS_WAIT_PRESENTED && _presentCnt >= REGISTER_RESET_TIMES && REGISTER_RESET_TIMES < 100 ) {
-      _presentCnt = 0;
-      // Reset RF Address
-      InitNodeAddress();
-      UpdateNodeAddress(NODEID_GATEWAY);
-      mStatus = SYS_WAIT_NODEID;
-      _doNow = TRUE;
-    }
-    
-    // Reset switch count
-    if( _count >= 10 && gConfig.swTimes > 0 ) {
-      gConfig.swTimes = 0;
-      gIsStatusChanged = TRUE;
-      SaveStatusData();
-    }
-    
-    // Feed the Watchdog
-    feed_wwdg();
-
-    if( _doNow ) {
-      // Send Message Immediately
-      _count = 0;
-      continue;
-    }
-    
-    // Failed or Timeout, then repeat init-step
-    //delay_ms(400);
-    mutex = 0;
-    WaitMutex(0x1FFFF);
-    _count %= 20;  // Every 10 seconds
-  }
-  
   return TRUE;
 }
 
@@ -807,6 +654,7 @@ void RestartCheck()
 #endif
 }
 uint8_t brecv = 0;
+const char *g_Ashining = "Ack";
 int main( void ) {
   uint8_t lv_Brightness;
       
@@ -897,6 +745,7 @@ int main( void ) {
     CC1101_EnableIRQ();
     CC1101_Set_Mode( RX_MODE );
     PrintDevStatus();
+    //mStatus = SYS_RUNNING;
 #ifdef ENABLE_SDTM
     gConfig.nodeID = BASESERVICE_ADDRESS;
     //memcpy(gConfig.NetworkID, RF24_BASE_RADIO_ID, ADDRESS_WIDTH);
@@ -906,20 +755,11 @@ int main( void ) {
     mStatus = SYS_RUNNING;
 #else
     if( gConfig.enSDTM ) {
-      gConfig.nodeID = BASESERVICE_ADDRESS;
-      //memcpy(gConfig.NetworkID, RF24_BASE_RADIO_ID, ADDRESS_WIDTH);
-      UpdateNodeAddress(NODEID_GATEWAY);
-      Msg_DevStatus(NODEID_MIN_REMOTE, RING_ID_ALL);
-      SendMyMessage();
       mStatus = SYS_RUNNING;
     } else {
-      // Must establish connection firstly
-      SayHelloToDevice(TRUE);
-      gConfig.enAutoPowerTest = 0;
-      gIsStatusChanged = TRUE;
+      mStatus = SYS_RUNNING;
     }
 #endif
-    //PrintDevStatus();
     while (mStatus == SYS_RUNNING) {
       
       // Feed the Watchdog
@@ -932,21 +772,33 @@ int main( void ) {
       ////////////rfscanner process///////////////////////////////     
       // Send message if ready
       //printlog("SndS");
-      SendMyMessage();
       //////////////////////////////
       if(brecv)
       {
           bMsgReady = ParseProtocol();
-          CC1101_Set_Mode( RX_MODE );
           brecv = 0;
+          CC1101_Clear_RxBuffer( );
+          //CC1101_Set_Mode( RX_MODE );
+          if(bMsgReady)
+          {
+            SendMyMessage();
+          }
+          else
+          { // no msg send need set to rx
+            CC1101_Set_Mode( RX_MODE );
+          }      
       }
-      if(offdelaytick == 0)
+      else
+      {
+        SendMyMessage();
+      }
+      /*if(offdelaytick == 0)
       {
         printlog("soffS");
         offdelaytick = -1;
         SetDeviceOnOff(0, RING_ID_ALL);
         printlog("soffE");
-      }
+      }*/
       RestartCheck();
       // Idle process, do it in timer4
       //idleProcess();
@@ -1772,7 +1624,8 @@ INTERRUPT_HANDLER(EXTI_PORTC_IRQHandler, 5) {
       {
         brecv = 1;
         memcpy(prcvMsg,g_RF24L01RxBuffer+1,i-1);
-        CC1101_Clear_RxBuffer( );
+        //bMsgReady = ParseProtocol();
+        //CC1101_Clear_RxBuffer( );
         //CC1101_Set_Mode( RX_MODE );
       }
   }

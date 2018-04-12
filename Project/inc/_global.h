@@ -23,6 +23,7 @@
 //#define EN_SENSOR_MQ2
 //#define EN_SENSOR_MQ7
 
+#define PLOAD_WIDTH                     32
 
 // Switch value for set power command
 #define DEVICE_SW_OFF               0       // Turn Off
@@ -60,8 +61,8 @@
 // NodeID Convention
 #define NODEID_GATEWAY          0
 #define NODEID_MAINDEVICE       1
-#define NODEID_MIN_DEVCIE       8
-#define NODEID_MAX_DEVCIE       63
+#define NODEID_MIN_DEVCIE       101
+#define NODEID_MAX_DEVCIE       200
 #define NODEID_MIN_REMOTE       64
 #define NODEID_MAX_REMOTE       127
 #define NODEID_PROJECTOR        128
@@ -323,7 +324,7 @@ void ResetNodeToRegister();
 #define IS_VALID_REMOTE(DevType)    ((DevType) >= remotetypRFSimply && (DevType) <= remotetypRFEnhanced)
 
 #define IS_GROUP_NODEID(nID)       (nID >= NODEID_MIN_GROUP && nID <= NODEID_MAX_GROUP)
-#define IS_NOT_DEVICE_NODEID(nID)  ((nID < NODEID_MIN_DEVCIE || nID > NODEID_MAX_DEVCIE) && nID != NODEID_MAINDEVICE)
+#define IS_NOT_DEVICE_NODEID(nID)  ((nID < NODEID_MIN_DEVCIE || nID > NODEID_MAX_DEVCIE))
 #define IS_NOT_REMOTE_NODEID(nID)  (nID < NODEID_MIN_REMOTE || nID > NODEID_MAX_REMOTE)
 #define IS_MINE_SUBID(nSID)        ((nSID) == 0 || ((nSID) & gConfig.subID))
 

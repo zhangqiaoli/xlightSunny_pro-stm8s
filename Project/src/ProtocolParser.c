@@ -130,49 +130,14 @@ uint8_t ParseProtocol(){
       }
     } else if( _type == I_CONFIG ) {
       // Node Config
-      switch( _sensor ) {
-      case NCF_QUERY:
-        // Inform controller with version & NCF data
-        Msg_NodeConfigData(_sender);
-        return 1;
-        break;
-
-      case NCF_DEV_SET_SUBID:
-        if( _specificNode )
-          gConfig.subID = rcvMsg.payload.data[0];
-        break;
-
-      case NCF_DEV_EN_SDTM:
-        if( _specificNode )
-          gConfig.enSDTM = rcvMsg.payload.data[0];
-        break;
-        
-      case NCF_DEV_MAX_NMRT:
-        gConfig.rptTimes = rcvMsg.payload.data[0];
-        break;
-        
-      case NCF_MAP_SENSOR:
-        gConfig.senMap = rcvMsg.payload.data[0] + rcvMsg.payload.data[1] * 256;
-        break;
-        
-      case NCF_MAP_FUNC:
-        gConfig.funcMap = rcvMsg.payload.data[0] + rcvMsg.payload.data[1] * 256;
-        break;
-
-      case NCF_DATA_ALS_RANGE:
-        gConfig.alsLevel[0] = rcvMsg.payload.data[0];
-        gConfig.alsLevel[1] = rcvMsg.payload.data[1];
-        if( gConfig.alsLevel[1] < gConfig.alsLevel[0] ) {
-          gConfig.alsLevel[1] = gConfig.alsLevel[0];
-        }
-        break;
-
-      case NCF_DATA_PIR_RANGE:
-        gConfig.pirLevel[0] = rcvMsg.payload.data[0];
-        gConfig.pirLevel[1] = rcvMsg.payload.data[1];
-        break;
+      uint8_t newNid = rcvMsg.payload.data[0];
+      if(!IS_NOT_DEVICE_NODEID(newNid))
+      {
+        gConfig.nodeID = newNid;
+        gConfig.rfAddr = newNid;
+        gIsConfigChanged = TRUE;
+        gResetRF = TRUE;
       }
-      gIsConfigChanged = TRUE;
       Msg_NodeConfigAck(_sender, _sensor);
       return 1;
     }else if( _type == I_GET_NONCE ) {
