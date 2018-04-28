@@ -23,7 +23,7 @@
 //#define EN_SENSOR_MQ2
 //#define EN_SENSOR_MQ7
 
-#define PLOAD_WIDTH                     32
+#define PLOAD_WIDTH                     27
 
 // Switch value for set power command
 #define DEVICE_SW_OFF               0       // Turn Off
@@ -59,8 +59,8 @@
 #define NODE_TYP_THIRDPARTY       't'
 
 // NodeID Convention
-#define NODEID_GATEWAY          0
-#define NODEID_MAINDEVICE       1
+#define NODEID_GATEWAY          1
+#define NODEID_MAINDEVICE       101
 #define NODEID_MIN_DEVCIE       101
 #define NODEID_MAX_DEVCIE       200
 #define NODEID_MIN_REMOTE       64

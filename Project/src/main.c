@@ -33,6 +33,8 @@ Connections:
   PC2 -> IRQ
 
 */
+#define MAINNODE 
+
 #ifdef TEST
 void testio()
 {
@@ -252,6 +254,7 @@ void ResetRFModule()
     CC1101_Init(gConfig.rfChannel,gConfig.rfAddr);
     CC1101_EnableIRQ();
     CC1101_Setup(gConfig.rfChannel,gConfig.rfAddr);
+    CC1101_Set_Mode( RX_MODE );
     UpdateNodeAddress(NODEID_GATEWAY); 
     gResetRF=FALSE;
   }
@@ -553,31 +556,38 @@ void CCT2ColdWarm(uint32_t ucBright, uint32_t ucWarmCold)
 // Send message and switch back to receive mode
 bool bSending = FALSE;
 bool SendMyMessage() {
-  //return TRUE;
+#ifndef MAINNODE
+  CC1101_Set_Mode( RX_MODE );
+  return TRUE;
+#endif
   if( bMsgReady ) {
     
     // Change tx destination if necessary
-    NeedUpdateRFAddress(sndMsg.header.destination);
+    NeedUpdateRFAddress(NODEID_GATEWAY);
     
     uint8_t lv_tried = 0;
-    uint16_t delay;
-    while (lv_tried++ <= 1 ) {
-      feed_wwdg();
-      //TODO
-      CC1101_Tx_Packet( psndMsg, PLOAD_WIDTH,1,ADDRESS_CHECK );
-      //The transmission failed, Notes: mutex == 2 doesn't mean failed
-      //It happens when rx address defers from tx address
-      //asm("nop"); //Place a breakpoint here to see memory
-      // Repeat the message if necessary
-      //delay = 0xFFF;
-      //while(delay--)feed_wwdg();
+    //TODO
+    // delay to avoid conflict 
+    if( bDelaySend) {
+      delaySendTick = ((gConfig.nodeID - NODEID_MIN_DEVCIE+1)%8)*40;
+      bDelaySend = FALSE;
     }
-    
-    // Switch back to receive mode
-    bMsgReady = 0;
-    CC1101_Set_Mode( RX_MODE );
-    // Reset Keep Alive Timer
-    mTimerKeepAlive = 0;
+    if(delaySendTick == 0)
+    {
+      while (lv_tried++ < gConfig.rptTimes ) {
+          feed_wwdg();
+
+          CC1101_Tx_Packet( psndMsg, PLOAD_WIDTH,NODEID_GATEWAY,ADDRESS_CHECK );
+          printlog("send ");
+          printnum(lv_tried);
+          printlog("\r\n");
+      }                   
+      // Switch back to receive mode
+      bMsgReady = 0;
+      CC1101_Set_Mode( RX_MODE );
+      // Reset Keep Alive Timer
+      mTimerKeepAlive = 0;
+    }
   }
 
   return TRUE;
@@ -654,7 +664,6 @@ void RestartCheck()
 #endif
 }
 uint8_t brecv = 0;
-const char *g_Ashining = "Ack";
 int main( void ) {
   uint8_t lv_Brightness;
       
@@ -765,6 +774,14 @@ int main( void ) {
       // Feed the Watchdog
       feed_wwdg();
       
+            // Idle Tick
+      if( !bMsgReady ) {
+        // Check Keep Alive Timer
+        if( mTimerKeepAlive > RTE_TM_KEEP_ALIVE ) {
+          Msg_DevBrightness(NODEID_GATEWAY,0);
+        }
+      }
+      
       ////////////rfscanner process///////////////////////////////
       ProcessOutputCfgMsg(); 
       // Save Config if Changed
@@ -800,11 +817,6 @@ int main( void ) {
         printlog("soffE");
       }*/
       RestartCheck();
-      // Idle process, do it in timer4
-      //idleProcess();
-      
-      // ToDo: Check heartbeats
-      // mStatus = SYS_RESET, if timeout or received a value 3 times consecutively
     }
   }
 }
@@ -956,7 +968,7 @@ void DelaySendMsg(uint16_t _msg, uint8_t _ring) {
     
   case 2:
     // send current brigntness status
-    Msg_DevBrightness(NODEID_GATEWAY);
+    Msg_DevBrightness(NODEID_GATEWAY,0);
     break;
   }
   
@@ -1557,6 +1569,10 @@ void tmrProcess() {
   {
     offdelaytick--; 
   }  
+  if(delaySendTick > 0)
+  {
+    delaySendTick--;
+  }
   if(gConfig.enAutoPowerTest)
   {
     if(gAgingRunningTimeTick < SUNNY_SWITCH_INTERVAL)

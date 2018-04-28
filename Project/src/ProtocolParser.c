@@ -6,6 +6,7 @@
 
 uint8_t bMsgReady = 0;
 bool bDelaySend = FALSE;
+uint16_t delaySendTick = 0;
 
 void MsgScanner_ProbeAck();
 void MsgScanner_ConfigAck(uint8_t offset,uint8_t cfglen,bool _isByUniqueid);
@@ -109,7 +110,7 @@ uint8_t ParseProtocol(){
           // Increase brightness to indicate ID required
           if( gConfig.cntRFReset < MAX_RF_RESET_TIME ) {
             SetDeviceBrightness(DEFAULT_BRIGHTNESS + 10, RING_ID_ALL);
-            Msg_DevBrightness(_sender);
+            Msg_DevBrightness(_sender,0);
             return 1;
           }
         }
@@ -138,7 +139,8 @@ uint8_t ParseProtocol(){
         gIsConfigChanged = TRUE;
         gResetRF = TRUE;
       }
-      Msg_NodeConfigAck(_sender, _sensor);
+      //TODO
+      //Msg_NodeConfigAck(_sender, _sensor);
       return 1;
     }else if( _type == I_GET_NONCE ) {
       // RF Scanner Probe
@@ -201,10 +203,10 @@ uint8_t ParseProtocol(){
     if( _needAck ) {
       if( IS_MINE_SUBID(_sensor) || _specificNode ) {
         if( _type == V_STATUS || _type == V_PERCENTAGE ) {
-          Msg_DevBrightness(_sender);
+          Msg_DevBrightness(_sender,1);
           return 1;
         } else if( _type == V_LEVEL ) { // CCT
-          Msg_DevBrightness(_sender);
+          Msg_DevBrightness(_sender,1);
           return 1;
         } else if( _type == V_RGBW ) { // Hue
           uint8_t _RingID = rcvMsg.payload.data[0];
@@ -229,9 +231,10 @@ uint8_t ParseProtocol(){
           bool _OnOff = (rcvMsg.payload.bValue == DEVICE_SW_TOGGLE ? DEVST_OnOff == DEVICE_SW_OFF : rcvMsg.payload.bValue == DEVICE_SW_ON);
           SetDeviceOnOff(_OnOff, RING_ID_ALL);
           if( _needAck ) {
-            bDelaySend = (rcvMsg.header.destination == BROADCAST_ADDRESS);
-            Msg_DevBrightness(_sender);
-            return 1;
+              bDelaySend = (rcvMsg.header.destination == BROADCAST_ADDRESS);
+              
+              Msg_DevBrightness(_sender,1);
+              return 1;
           }
         }
         else if( _lenPayl == 3)
@@ -291,7 +294,7 @@ uint8_t ParseProtocol(){
         SetDeviceBrightness(_Brightness, RING_ID_ALL);
         if( _needAck ) {
           bDelaySend = (rcvMsg.header.destination == BROADCAST_ADDRESS);
-          Msg_DevBrightness(_sender);
+          Msg_DevBrightness(_sender,1);
           return 1;
         }
       } else if( _type == V_LEVEL ) { // CCT
@@ -438,8 +441,8 @@ void Msg_DevOnOff(uint8_t _to) {
 }
 
 // Prepare device brightness message
-void Msg_DevBrightness(uint8_t _to) {
-  build(_to, gConfig.subID, C_REQ, V_PERCENTAGE, 0, 1);
+void Msg_DevBrightness(uint8_t _to, bool _isAck) {
+  build(_to, gConfig.subID, C_REQ, V_PERCENTAGE, 0, _isAck);
   moSetLength(2);
   moSetPayloadType(P_BYTE);
   sndMsg.payload.data[0] = DEVST_OnOff;
